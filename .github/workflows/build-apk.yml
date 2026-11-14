@@ -1,0 +1,57 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP and prepare web folder
+        run: |
+          mkdir -p www
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            unzip -q "$ZIP_FILE" -d temp_extract
+            HTML_FILE=$(find temp_extract -name "*.html" | head -n 1)
+            cp -r "$(dirname "$HTML_FILE")"/* www/
+            if [ ! -f www/index.html ]; then
+              FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
+              mv "$FIRST_HTML" www/index.html
+            fi
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Initialize Capacitor and add Android
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "Snake" "com.retro.snake" --web-dir=www
+          npx cap add android
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          archive: false
